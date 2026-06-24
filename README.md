@@ -1,32 +1,60 @@
-# Enterprise RAG Assistant
+# Atlas — Enterprise RAG Assistant
 
-A retrieval-augmented generation (RAG) assistant for enterprise knowledge
-retrieval, built with **LangChain** and **GPT-4**. Ask natural-language questions
-and get answers grounded in your internal documents, with the source passages
-shown alongside each answer.
+A retrieval-augmented generation (RAG) assistant for enterprise knowledge retrieval,
+built with **LangChain** and the **GPT-4 family**. Employees ask natural-language
+questions and get answers grounded strictly in the company's own documents — with the
+source passages shown alongside every answer, and a built-in evaluation harness that
+measures answer quality, latency, and consistency.
 
-> **About this repository.** This is a clean, public **reference implementation**
-> of the architecture. It runs on a small sample document set so it is easy to
-> clone and try. The pipeline is identical to one designed to scale to a large
-> enterprise corpus (tens of thousands of documents) — only the corpus size and
-> the embedding/vector-store backing differ at scale.
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
+![LangChain](https://img.shields.io/badge/LangChain-1.x-1C3C3C)
+![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4_family-412991?logo=openai&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-app-FF4B4B?logo=streamlit&logoColor=white)
+![Chroma](https://img.shields.io/badge/Vector_store-Chroma-FF6F61)
+![License](https://img.shields.io/badge/License-MIT-2563EB)
+
+> **About this repository.** A clean, public **reference implementation** of the
+> architecture. It runs on a small sample document set so it is easy to clone and try;
+> the pipeline is the same one designed to scale to a large enterprise corpus
+> (tens of thousands of documents). Only the corpus size and the vector-store backing
+> differ at scale.
 
 ---
 
-## What it does
+## Demo
 
-1. **Ingests and cleans** enterprise documents — normalising whitespace, stripping
-   boilerplate (page markers, confidentiality stamps, rule lines) so retrieval
-   keys on content, not formatting noise.
-2. **Indexes** the cleaned text as vector embeddings in a Chroma vector store.
-3. **Answers questions** by retrieving the most relevant passages and passing them
-   to GPT-4 under a strict, grounded prompt (answer only from context; admit when
-   the answer is not present; cite sources).
-4. **Generates a synthetic Q&A evaluation set** from the documents using GPT-4, so
-   the system can be measured without hand-labelling.
-5. **Evaluates** the assistant on three dimensions: **response quality**
-   (LLM-as-judge, 1–5), **latency**, and **contextual consistency** (same question
-   asked twice).
+![Atlas assistant — grounded answer with sources](docs/screenshot.png)
+
+*Ask a question → grounded answer with a trust badge, latency, and the exact source
+passages it used. Ask something outside the documents and it declines rather than
+guessing.*
+
+**Built-in evaluation:** quality, latency, and consistency on a synthetic Q&A set.
+
+![Evaluation view](docs/evaluation.png)
+
+---
+
+## Why this design
+
+The whole point of an enterprise assistant is **trust**. A general chatbot might
+confidently invent a company policy; that is unacceptable internally. Atlas answers
+**only** from retrieved documents and is prompted to say it doesn't know when the
+answer isn't present — so when it does answer, the answer is grounded and source-cited.
+
+## Features
+
+- **Grounded answers with sources.** Every response is generated only from retrieved
+  passages and displays the source files it used.
+- **Structured data-cleaning pipeline.** Raw documents are normalised (whitespace,
+  boilerplate, control characters) before chunking, so retrieval keys on content.
+- **Synthetic Q&A generation.** A GPT-4-family model reads each passage and generates
+  grounded question/answer pairs, producing a labelled evaluation set without manual
+  annotation.
+- **Three-axis evaluation.** Response **quality** (LLM-as-judge, 1–5), **latency**, and
+  **contextual consistency** (same question asked twice), with an aggregate report.
+- **Polished Streamlit UI.** Assistant and Evaluation views with a clean, professional
+  design.
 
 ---
 
@@ -37,60 +65,43 @@ shown alongside each answer.
                                               │
                               question ─▶ retrieve top-k
                                               │
-                              context + question ─▶ GPT-4 ─▶ grounded answer + sources
+                              context + question ─▶ LLM ─▶ grounded answer + sources
 
- Evaluation:  documents ─▶ GPT-4 ─▶ synthetic Q&A set ─▶ run through pipeline
-                                                          ─▶ judge quality
-                                                          ─▶ measure latency
-                                                          ─▶ check consistency
+ Evaluation:  documents ─▶ LLM ─▶ synthetic Q&A set ─▶ run through pipeline
+                                                        ─▶ judge quality
+                                                        ─▶ measure latency
+                                                        ─▶ check consistency
 ```
 
 ---
 
-## Setup
+## Quickstart
 
 ```bash
-# 1. Clone and enter the project
-git clone <your-repo-url>
+git clone https://github.com/spranjal0902/enterprise-rag-assistant.git
 cd enterprise-rag-assistant
 
-# 2. (Recommended) create a virtual environment
-python -m venv .venv && source .venv/bin/activate
-
-# 3. Install dependencies
+python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# 4. Add your OpenAI API key
-cp .env.example .env        # then edit .env and paste your key
+cp .env.example .env            # then edit .env and add your OPENAI_API_KEY
+
+python scripts/build_index.py   # build the vector index from the sample documents
+python -m streamlit run app.py  # launch the assistant at http://localhost:8501
 ```
 
-The project uses GPT-4 and OpenAI embeddings, so an `OPENAI_API_KEY` is required
-to build the index and run the assistant.
+> The project uses an OpenAI model, so an `OPENAI_API_KEY` (with billing enabled) is
+> required. Running the full demo on the sample corpus costs only a few cents.
 
----
-
-## Usage
+### Run the evaluation
 
 ```bash
-# 1. Build the vector index from the sample documents
-python scripts/build_index.py
-
-# 2. Launch the assistant UI
-streamlit run app.py
+python -m src.synthetic_qa   # generate the synthetic Q&A set from the documents
+python -m src.evaluate       # score quality, latency, and consistency
 ```
 
-To run the evaluation loop:
-
-```bash
-# Generate a synthetic Q&A set from the documents
-python -m src.synthetic_qa
-
-# Evaluate quality, latency, and consistency on that set
-python -m src.evaluate
-```
-
-Evaluation results are written to `data/eval/eval_results.json` and the summary is
-shown in the **Evaluation** tab of the app.
+Results are written to `data/eval/eval_results.json` and shown in the app's
+**Evaluation** tab.
 
 ---
 
@@ -98,17 +109,16 @@ shown in the **Evaluation** tab of the app.
 
 ```
 enterprise-rag-assistant/
-├── app.py                     # Streamlit UI (Assistant + Evaluation tabs)
+├── app.py                     # Streamlit UI (Assistant + Evaluation)
 ├── requirements.txt
 ├── .env.example
-├── data/
-│   └── sample_docs/           # sample enterprise corpus (handbook, policies, FAQ)
-├── scripts/
-│   └── build_index.py         # build the Chroma index
+├── .streamlit/config.toml     # UI theme
+├── data/sample_docs/          # sample corpus (handbook, policies, FAQ)
+├── scripts/build_index.py     # build the Chroma index
 └── src/
     ├── config.py              # all tunable settings in one place
-    ├── ingest.py              # load -> clean -> chunk (data-cleaning workflow)
-    ├── rag_pipeline.py        # embeddings, vector store, retriever, GPT-4 chain
+    ├── ingest.py              # load -> clean -> chunk
+    ├── rag_pipeline.py        # embeddings, vector store, retriever, LLM chain
     ├── synthetic_qa.py        # synthetic Q&A generation for evaluation
     └── evaluate.py            # quality / latency / consistency harness
 ```
@@ -118,22 +128,30 @@ enterprise-rag-assistant/
 ## Design notes
 
 - **Grounded prompting.** The system prompt forbids answering outside the retrieved
-  context and asks the model to cite source files. This is the main lever against
-  hallucination in a RAG system.
+  context and asks the model to cite source files — the main lever against
+  hallucination.
 - **Synthetic evaluation data.** Reference answers are generated directly from the
-  source passages, so the documents themselves act as ground truth. This makes
-  evaluation scale to large corpora where hand-labelling is impractical.
-- **Three evaluation axes.** Quality, latency, and consistency are tracked together
-  because a useful assistant has to be correct, fast, and stable — improving one at
-  the expense of another is easy to miss without measuring all three.
-- **Scaling.** For a large corpus the same pipeline swaps the local Chroma store for
-  a managed/distributed vector database and batches the embedding step; the
-  retrieval, prompting, and evaluation code is unchanged.
+  source passages, so the documents act as ground truth and evaluation scales without
+  hand-labelling.
+- **Three axes, together.** A useful assistant must be correct, fast, and stable;
+  tracking quality, latency, and consistency together prevents improving one at the
+  silent expense of another.
+- **Model choice.** Configured for `gpt-4o-mini` by default (cost-efficient,
+  GPT-4-family). The pipeline is model-agnostic — change `CHAT_MODEL` in
+  `src/config.py` to any compatible model.
+- **Scaling.** For a large corpus the same pipeline swaps the local Chroma store for a
+  managed/distributed vector database and batches the embedding step; retrieval,
+  prompting, and evaluation code is unchanged.
 
----
+## Troubleshooting
 
-## Requirements
+- **`ModuleNotFoundError` after install** — your virtual environment isn't active, or a
+  separate (e.g. Anaconda) Python is shadowing it. Activate the venv and run tools as
+  `python -m streamlit run app.py` to stay inside the project environment.
+- **`model ... does not exist or you do not have access`** — set `CHAT_MODEL` in
+  `src/config.py` to a model your account can use (e.g. `gpt-4o-mini`).
+- **`No index found`** — run `python scripts/build_index.py` first.
 
-See `requirements.txt`. Core stack: `langchain`, `langchain-openai`,
-`langchain-community`, `langchain-chroma`, `chromadb`, `streamlit`,
-`python-dotenv`.
+## License
+
+MIT — see [LICENSE](LICENSE).
